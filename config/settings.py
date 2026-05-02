@@ -36,6 +36,7 @@ AUTH_USER_MODEL = 'users.User'
 
 INSTALLED_APPS = [
     'users',
+    'questions',
     'rest_framework',
     'rest_framework_simplejwt',
     'drf_spectacular',
