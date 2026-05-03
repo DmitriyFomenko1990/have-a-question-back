@@ -1,8 +1,9 @@
-from django.db.models import Count, OuterRef, Exists
+from django.db.models import Count, OuterRef, Exists, Q
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema
 
 from .models import Question, QuestionOption, QuestionResponse
 from .serializers import (
@@ -11,6 +12,7 @@ from .serializers import (
     QuestionListSerializer,
     QuestionRespondSerializer,
     QuestionResponseSerializer,
+    QuestionSearchSerializer,
 )
 
 def get_questions_queryset(user):
@@ -51,9 +53,57 @@ class MyQuestionListView(generics.ListAPIView):
         return get_questions_queryset(self.request.user).filter(author=self.request.user)
 
 
+class QuestionSearchView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        request=QuestionSearchSerializer,
+        responses=QuestionListSerializer(many=True),
+        summary="Search questions",
+        description="Search, filter, and sort questions available to the current user.",
+    )
+
+    def post(self, request):
+        serializer = QuestionSearchSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        search = serializer.validated_data.get("search", "").strip()
+        answered = serializer.validated_data.get("answered", "all")
+        sort = serializer.validated_data.get("sort", "")
+        sort_type = serializer.validated_data.get("sort_type", "default")
+
+        queryset = get_questions_queryset(request.user).exclude(author=request.user)
+
+        if search:
+            queryset = queryset.filter(
+                Q(title__icontains=search) | Q(description__icontains=search)
+            )
+
+        if answered == "true":
+            queryset = queryset.filter(has_answered=True)
+
+        if answered == "false":
+            queryset = queryset.filter(has_answered=False)
+
+        if sort_type == "asc":
+            queryset = queryset.order_by(sort)
+
+        if sort_type == "desc":
+            queryset = queryset.order_by(f"-{sort}")
+
+        output_serializer = QuestionListSerializer(
+            queryset,
+            many=True,
+            context={"request": request},
+        )
+
+        return Response(output_serializer.data)
+
+
+
 class QuestionDetailView(generics.RetrieveAPIView):
     serializer_class = QuestionDetailSerializer
-    permission_classes = (AllowAny,)
+    permission_classes = (IsAuthenticated,)
 
     def get_queryset(self):
         return (

@@ -73,6 +73,41 @@ class QuestionListSerializer(serializers.ModelSerializer):
         return response.custom_answer_text
 
 
+class QuestionSearchSerializer(serializers.Serializer):
+    search = serializers.CharField(required=False, allow_blank=True)
+    answered = serializers.ChoiceField(
+        choices=("all", "true", "false"),
+        required=False,
+        default="all",
+    )
+    sort = serializers.ChoiceField(
+        choices=("created_at", "responses_count"),
+        required=False,
+        allow_blank=True,
+        default="",
+    )
+
+    sort_type = serializers.ChoiceField(
+        choices=("default", "asc", "desc"),
+        required=False,
+        default="default",
+    )
+
+    def validate(self, attrs):
+        sort = attrs.get("sort", "" )
+        sort_type = attrs.get("sort_type", "default")
+
+        if sort_type in ("asc", "desc") and not sort:
+            raise serializers.ValidationError("Sort must be provided when sort type is not default")
+
+        if sort_type == "default":
+            attrs["sort"] = ""
+
+        return attrs
+
+    
+
+
 class QuestionDetailSerializer(serializers.ModelSerializer):
     author = serializers.CharField(source="author.username", read_only=True)
     options = QuestionOptionSerializer(many=True, read_only=True)
